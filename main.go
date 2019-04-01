@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"image"
+	"io"
 	"log"
 	"os"
 
@@ -20,44 +21,37 @@ func main() {
 		lpath = flag.String("l", "", "path to image(layer image)")
 	)
 	flag.Parse()
-	fmt.Println(*bpath)
 
-	baseF, err := os.Open(*bpath)
+	baseConfig := getImageConfig(*bpath)
+	layerFileConfig := getImageConfig(*lpath)
+	height, width := calcStartPoint(baseConfig, layerFileConfig)
+	fmt.Println(height)
+	fmt.Println(width)
+
+	baseFile, err := os.Open(*bpath)
 	if err != nil {
-		fmt.Println(err)
-		panic(err)
+		log.Fatal(err)
 	}
-	defer baseF.Close()
-	fmt.Println(baseF)
-	conf, format, err := image.DecodeConfig(baseF)
+	defer baseFile.Close()
+	baseImage, formatName, err := image.Decode(baseFile)
 	if err != nil {
-		fmt.Println(err)
 		panic(err)
-	}
-	fmt.Println(format)
-	fmt.Println(conf)
-	fmt.Println(baseF)
-	fmt.Println("---")
-	baseImage, formatName, err := image.Decode(baseF)
-	if err != nil {
-		fmt.Println(err)
-		panic(err)
+		// log.Fatal(err)
 	}
 	fmt.Println(formatName)
 
-	layerF, err := os.Open(*lpath)
+	layerFile, err := os.Open(*lpath)
 	if err != nil {
-		fmt.Println(err)
-		panic(err)
+		log.Fatal(err)
 	}
-	fmt.Println(layerF)
-	layerImage, _, err := image.Decode(layerF)
+	defer layerFile.Close()
+	layerImage, _, err := image.Decode(layerFile)
 	if err != nil {
-		fmt.Println(err)
 		panic(err)
+		// log.Fatal(err)
 	}
 
-	startPointLogo := image.Point{0, 0} //上に
+	startPointLogo := image.Point{width, height}
 	logoRectangle := image.Rectangle{startPointLogo, startPointLogo.Add(layerImage.Bounds().Size())}
 	originRectangle := image.Rectangle{image.Point{0, 0}, baseImage.Bounds().Size()}
 
@@ -74,23 +68,27 @@ func main() {
 	opt.Quality = 100
 
 	jpeg.Encode(out, rgba, &opt)
-	//----
-	// reader := base64.NewDecoder(base64.StdEncoding, strings.NewReader(data))
-	layerF2, err := os.Open(*lpath)
-	if err != nil {
-		fmt.Println(err)
-		panic(err)
-	}
-	defer layerF2.Close()
-	fmt.Println(layerF)
-	fmt.Println("---")
-	fmt.Println(layerF2)
-	if layerF == layerF2 {
-		fmt.Println("true")
-	}
-	config, format, err := image.DecodeConfig(layerF2)
+}
+
+func getImageConfig(path string) image.Config {
+	file, err := os.Open(path)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("Width:", config.Width, "Height:", config.Height, "Format:", format)
+	defer file.Close()
+	baseConfig := getImgConfig(file)
+	return baseConfig
+}
+
+func getImgConfig(file io.Reader) image.Config {
+	config, _, err := image.DecodeConfig(file)
+	if err != nil {
+		log.Fatal(err)
+		panic(err)
+	}
+	return config
+}
+
+func calcStartPoint(baseConfig image.Config, layerConfig image.Config) (int, int) {
+	return (baseConfig.Height / 2) - (layerConfig.Height / 2), (baseConfig.Width / 2) - (layerConfig.Width / 2)
 }
