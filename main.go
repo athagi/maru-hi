@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"image"
 	"io"
@@ -9,7 +10,9 @@ import (
 	"os"
 
 	"image/color"
+	"image/draw"
 	_ "image/gif"
+	"image/jpeg"
 	_ "image/jpeg"
 	"image/png"
 	_ "image/png"
@@ -19,7 +22,77 @@ import (
 	"golang.org/x/image/math/fixed"
 )
 
+var TEMP_PNG = "temp.png"
+
 func main() {
+
+	var (
+		bpath = flag.String("p", "", "path to image(base image)")
+		// lpath = flag.String("l", "", "path to image(layer image)")
+		text = flag.String("t", "sample", "text to insert")
+	)
+	flag.Parse()
+
+	writeTextImg(*text)
+
+	// baseConfig := getImageConfig(*bpath)
+	// layerFileConfig := getImageConfig(*lpath)
+	// height, width := calcStartPoint(baseConfig, layerFileConfig)
+	// fmt.Println(height)
+	// fmt.Println(width)
+
+	baseFile, err := os.Open(*bpath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer baseFile.Close()
+	baseImage, formatName, err := image.Decode(baseFile)
+	if err != nil {
+		panic(err)
+		// log.Fatal(err)
+	}
+	fmt.Println(formatName)
+
+	// layerFile, err := os.Open(*lpath)
+	layerFile, err := os.Open(TEMP_PNG)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer layerFile.Close()
+	layerImage, _, err := image.Decode(layerFile)
+	if err != nil {
+		panic(err)
+		// log.Fatal(err)
+	}
+
+	// startPointLogo := image.Point{width, height}
+	startPointLogo := image.Point{0, 0}
+	// logoRectangle := image.Rectangle{startPointLogo, startPointLogo.Add(m.Bounds().Size())}
+	logoRectangle := image.Rectangle{startPointLogo, startPointLogo.Add(layerImage.Bounds().Size())}
+	originRectangle := image.Rectangle{image.Point{0, 0}, baseImage.Bounds().Size()}
+
+	rgba := image.NewRGBA(originRectangle)
+	draw.Draw(rgba, originRectangle, baseImage, image.Point{0, 0}, draw.Src)
+	draw.Draw(rgba, logoRectangle, layerImage, image.Point{0, 0}, draw.Over)
+	// draw.Draw(rgba, logoRectangle, m, image.Point{0, 0}, draw.Over)
+
+	out, err := os.Create("res.jpeg")
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	var opt jpeg.Options
+	opt.Quality = 100
+
+	jpeg.Encode(out, rgba, &opt)
+}
+func checkError(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
+
+func writeTextImg(text string) {
 	img := image.NewRGBA(image.Rect(0, 0, 320, 240))
 
 	// for y := img.Rect.Min.Y; y < img.Rect.Max.Y; y++ {
@@ -34,76 +107,19 @@ func main() {
 		Dst:  img,
 		Src:  image.NewUniform(color.RGBA{255, 255, 255, 255}),
 		Face: basicfont.Face7x13,
-		Dot:  fixed.Point26_6{fixed.Int26_6(16 * 64), fixed.Int26_6(12 * 64)},
+		Dot:  fixed.Point26_6{fixed.Int26_6(24 * 64), fixed.Int26_6(18 * 64)},
 	}
-	d.DrawString("hello world")
+	d.DrawString(text)
 
-	file, err := os.Create("tea.png")
+	file, err := os.Create(TEMP_PNG)
 	if err != nil {
 		panic(err.Error())
 	}
-	defer file.Close()
 
 	if err := png.Encode(file, img); err != nil {
 		panic(err.Error())
 	}
-	// var (
-	// 	bpath = flag.String("p", "", "path to image(base image)")
-	// 	lpath = flag.String("l", "", "path to image(layer image)")
-	// )
-	// flag.Parse()
-
-	// baseConfig := getImageConfig(*bpath)
-	// layerFileConfig := getImageConfig(*lpath)
-	// height, width := calcStartPoint(baseConfig, layerFileConfig)
-	// fmt.Println(height)
-	// fmt.Println(width)
-
-	// baseFile, err := os.Open(*bpath)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	// defer baseFile.Close()
-	// baseImage, formatName, err := image.Decode(baseFile)
-	// if err != nil {
-	// 	panic(err)
-	// 	// log.Fatal(err)
-	// }
-	// fmt.Println(formatName)
-
-	// layerFile, err := os.Open(*lpath)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	// defer layerFile.Close()
-	// layerImage, _, err := image.Decode(layerFile)
-	// if err != nil {
-	// 	panic(err)
-	// 	// log.Fatal(err)
-	// }
-
-	// startPointLogo := image.Point{width, height}
-	// logoRectangle := image.Rectangle{startPointLogo, startPointLogo.Add(layerImage.Bounds().Size())}
-	// originRectangle := image.Rectangle{image.Point{0, 0}, baseImage.Bounds().Size()}
-
-	// rgba := image.NewRGBA(originRectangle)
-	// draw.Draw(rgba, originRectangle, baseImage, image.Point{0, 0}, draw.Src)
-	// draw.Draw(rgba, logoRectangle, layerImage, image.Point{0, 0}, draw.Over)
-
-	// out, err := os.Create("res.jpeg")
-	// if err != nil {
-	// 	fmt.Println(err)
-	// }
-
-	// var opt jpeg.Options
-	// opt.Quality = 100
-
-	// jpeg.Encode(out, rgba, &opt)
-}
-func checkError(err error) {
-	if err != nil {
-		panic(err)
-	}
+	defer file.Close()
 }
 
 func getImageConfig(path string) image.Config {
