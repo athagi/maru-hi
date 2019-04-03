@@ -28,18 +28,10 @@ func main() {
 
 	var (
 		bpath = flag.String("p", "", "path to image(base image)")
-		// lpath = flag.String("l", "", "path to image(layer image)")
-		text = flag.String("t", "sample", "text to insert")
+		lpath = flag.String("l", "", "path to image(layer image)")
+		text  = flag.String("t", "sample", "text to insert")
 	)
 	flag.Parse()
-
-	writeTextImg(*text)
-
-	// baseConfig := getImageConfig(*bpath)
-	// layerFileConfig := getImageConfig(*lpath)
-	// height, width := calcStartPoint(baseConfig, layerFileConfig)
-	// fmt.Println(height)
-	// fmt.Println(width)
 
 	baseFile, err := os.Open(*bpath)
 	if err != nil {
@@ -53,38 +45,72 @@ func main() {
 	}
 	fmt.Println(formatName)
 
-	// layerFile, err := os.Open(*lpath)
-	layerFile, err := os.Open(TEMP_PNG)
-	if err != nil {
-		log.Fatal(err)
+	if len(*lpath) != 0 {
+		baseConfig := getImageConfig(*bpath)
+		layerFileConfig := getImageConfig(*lpath)
+		// height, width := calcCenterPoint(baseConfig, layerFileConfig)
+		height, width := calcLowerLeftPoint(baseConfig, layerFileConfig)
+
+		layerFile, err := os.Open(*lpath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer layerFile.Close()
+		layerImage, _, err := image.Decode(layerFile)
+		if err != nil {
+			panic(err)
+			// log.Fatal(err)
+		}
+
+		startPointLogo := image.Point{width, height}
+		logoRectangle := image.Rectangle{startPointLogo, startPointLogo.Add(layerImage.Bounds().Size())}
+		originRectangle := image.Rectangle{image.Point{0, 0}, baseImage.Bounds().Size()}
+		rgba := image.NewRGBA(originRectangle)
+		draw.Draw(rgba, originRectangle, baseImage, image.Point{0, 0}, draw.Src)
+		draw.Draw(rgba, logoRectangle, layerImage, image.Point{0, 0}, draw.Over)
+		out, err := os.Create("res.jpeg")
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		var opt jpeg.Options
+		opt.Quality = 100
+
+		jpeg.Encode(out, rgba, &opt)
+	} else if len(*text) != 0 {
+		writeTextImg(*text)
+		baseConfig := getImageConfig(*bpath)
+		layerFileConfig := getImageConfig(TEMP_PNG)
+		// height, width := calcCenterPoint(baseConfig, layerFileConfig)
+		height, width := calcCenterPoint(baseConfig, layerFileConfig)
+		layerFile, err := os.Open(TEMP_PNG)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer layerFile.Close()
+		layerImage, _, err := image.Decode(layerFile)
+		if err != nil {
+			panic(err)
+			// log.Fatal(err)
+		}
+		startPointLogo := image.Point{height, width}
+		logoRectangle := image.Rectangle{startPointLogo, startPointLogo.Add(layerImage.Bounds().Size())}
+		originRectangle := image.Rectangle{image.Point{0, 0}, baseImage.Bounds().Size()}
+		rgba := image.NewRGBA(originRectangle)
+		draw.Draw(rgba, originRectangle, baseImage, image.Point{0, 0}, draw.Src)
+		draw.Draw(rgba, logoRectangle, layerImage, image.Point{0, 0}, draw.Over)
+		out, err := os.Create("res.jpeg")
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		var opt jpeg.Options
+		opt.Quality = 100
+
+		jpeg.Encode(out, rgba, &opt)
+
 	}
-	defer layerFile.Close()
-	layerImage, _, err := image.Decode(layerFile)
-	if err != nil {
-		panic(err)
-		// log.Fatal(err)
-	}
 
-	// startPointLogo := image.Point{width, height}
-	startPointLogo := image.Point{0, 0}
-	// logoRectangle := image.Rectangle{startPointLogo, startPointLogo.Add(m.Bounds().Size())}
-	logoRectangle := image.Rectangle{startPointLogo, startPointLogo.Add(layerImage.Bounds().Size())}
-	originRectangle := image.Rectangle{image.Point{0, 0}, baseImage.Bounds().Size()}
-
-	rgba := image.NewRGBA(originRectangle)
-	draw.Draw(rgba, originRectangle, baseImage, image.Point{0, 0}, draw.Src)
-	draw.Draw(rgba, logoRectangle, layerImage, image.Point{0, 0}, draw.Over)
-	// draw.Draw(rgba, logoRectangle, m, image.Point{0, 0}, draw.Over)
-
-	out, err := os.Create("res.jpeg")
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	var opt jpeg.Options
-	opt.Quality = 100
-
-	jpeg.Encode(out, rgba, &opt)
 }
 func checkError(err error) {
 	if err != nil {
@@ -141,9 +167,17 @@ func getImgConfig(file io.Reader) image.Config {
 	return config
 }
 
-func calcStartPoint(baseConfig image.Config, layerConfig image.Config) (int, int) {
+func calcCenterPoint(baseConfig image.Config, layerConfig image.Config) (int, int) {
 	return (baseConfig.Height / 2) - (layerConfig.Height / 2), (baseConfig.Width / 2) - (layerConfig.Width / 2)
 }
+
+func calcLowerLeftPoint(baseConfig image.Config, layerConfig image.Config) (int, int) {
+	return (baseConfig.Height - layerConfig.Height), 0
+}
+
+// func calcLowerRightPoint(baseConfig image.Config, layerConfig image.Config) (int, int) {
+// 	return (baseConfig.Height - layerConfig.Height), (baseConfig.Width - layerConfig.Width)
+// }
 
 func fontload(fname string) []byte {
 	file, err := os.Open(fname)
